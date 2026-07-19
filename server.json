@@ -1,0 +1,63 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.alexar76/aimarket-mcp",
+  "title": "AIMarket MCP Gateway",
+  "description": "Stdio + Streamable-HTTP MCP gateway: SSRF-hardened web_fetch, web_search, metis_verify.",
+  "repository": {
+    "url": "https://github.com/alexar76/aimarket-mcp",
+    "source": "github"
+  },
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "aimarket-mcp",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "AIMARKET_METIS_URL",
+          "description": "Metis verify API base URL",
+          "isRequired": false,
+          "isSecret": false
+        },
+        {
+          "name": "AIMARKET_METIS_KEY",
+          "description": "Optional bearer token for Metis verify",
+          "isRequired": false,
+          "isSecret": true
+        },
+        {
+          "name": "AIMARKET_SEARCH_URL",
+          "description": "DuckDuckGo HTML search endpoint override",
+          "isRequired": false,
+          "isSecret": false
+        }
+      ]
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://{aimarket_host}/mcp",
+      "variables": {
+        "aimarket_host": {
+          "description": "Host[:port] of your aimarket-mcp deployment (no scheme). Default: local Docker.",
+          "isRequired": false,
+          "default": "127.0.0.1:9090"
+        }
+      },
+      "headers": [
+        {
+          "name": "Authorization",
+          "description": "Bearer token matching AIMARKET_MCP_KEY when auth is enabled",
+          "isRequired": false,
+          "isSecret": true
+        }
+      ]
+    }
+  ]
+}

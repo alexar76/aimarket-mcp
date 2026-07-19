@@ -1,0 +1,17 @@
+services:
+  aimarket-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile.http
+    image: aimarket-mcp:latest
+    container_name: aimarket-mcp
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9090:9090"
+    environment:
+      AIMARKET_MCP_PORT: "9090"
+      AIMARKET_MCP_PRODUCTION: "1"          # fail-closed: require AIMARKET_MCP_KEY
+      AIMARKET_MCP_KEY: "${AIMARKET_MCP_KEY:?set a bearer key}"
+      AIMARKET_MCP_RATE: "120"
+      AIMARKET_METIS_URL: "https://metis.modelmarket.dev"
+    # AIMARKET_METIS_KEY / AIMARKET_SEARCH_URL optional

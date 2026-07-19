@@ -1,0 +1,22 @@
+# Glama-optimized alias — same as Dockerfile (explicit name for admin overrides).
+# aimarket-mcp — stdio MCP gateway for Glama / Claude Desktop
+FROM python:3.12-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    UV_SYSTEM_PYTHON=1
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential \
+    && pip install --no-cache-dir uv \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements-mcp.txt pyproject.toml README.md LICENSE ./
+COPY aimarket_mcp ./aimarket_mcp
+COPY mcp_stdio_server.py ./
+
+RUN uv pip install --system -r requirements-mcp.txt \
+    && uv pip install --system --no-deps -e .
+
+ENTRYPOINT ["python", "mcp_stdio_server.py"]
