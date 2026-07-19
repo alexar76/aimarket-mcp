@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: MCP entrypoint + Glama manifest
+        run: |
+          test -f mcp_stdio_server.py
+          test -f requirements-mcp.txt
+          test -f glama.json
+          test -f Dockerfile
+          test -f Dockerfile.glama
+          grep -qi "Model Context Protocol" README.md
+          python3 -c "import json; g=json.load(open('glama.json')); assert g['command']==['.venv/bin/python','mcp_stdio_server.py']"
+          ! grep -q 'uvicorn' Dockerfile
+          grep -q 'UV_SYSTEM_PYTHON' Dockerfile
+          grep -q 'uv pip install --system' Dockerfile
+          test -x scripts/glama_install.sh
+
+      - name: Glama install script (venv path)
+        run: |
+          bash scripts/glama_install.sh
+          test -x .venv/bin/python
+          .venv/bin/python -c "import aimarket_mcp"
+
+      - name: Install
+        run: pip install -e ".[dev]" pytest-cov
+
+      - name: Pytest + coverage badge
+        env:
+          AICOM_CI_ENFORCE_BADGE_SYNC: "1"
+        run: bash scripts/ci_coverage_badge.sh -- tests/ -q --cov=aimarket_mcp
