@@ -1,0 +1,9 @@
+{
+  "$schema": "https://glama.ai/mcp/schemas/server.json",
+  "maintainers": ["alexar76"],
+  "name": "aimarket-mcp",
+  "description": "MCP server (stdio): alexar76 ecosystem gateway — SSRF-hardened web_fetch, web_search, metis_verify.",
+  "repository": "https://github.com/alexar76/aimarket-mcp",
+  "dockerfile": "Dockerfile.glama",
+  "command": [".venv/bin/python", "mcp_stdio_server.py"]
+}
