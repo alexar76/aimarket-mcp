@@ -1,0 +1,20 @@
+# aimarket-mcp — Streamable-HTTP deployment (docker compose / self-host)
+FROM python:3.11-slim
+
+LABEL org.opencontainers.image.title="aimarket-mcp" \
+      org.opencontainers.image.description="alexar76 ecosystem MCP gateway (HTTP :9090)"
+
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 AIMARKET_MCP_PORT=9090
+
+WORKDIR /app
+COPY pyproject.toml README.md mcp_stdio_server.py ./
+COPY aimarket_mcp ./aimarket_mcp
+RUN pip install --no-cache-dir . \
+    && useradd --uid 1000 --create-home --shell /usr/sbin/nologin mcp
+USER mcp
+
+EXPOSE 9090
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:9090/health',timeout=4).status==200 else 1)"
+
+CMD ["aimarket-mcp-http"]
