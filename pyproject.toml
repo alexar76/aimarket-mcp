@@ -1,0 +1,65 @@
+[project]
+name = "aimarket-mcp"
+# The stdio server lives INSIDE the package, not as a top-level `mcp_stdio_server` module.
+# Three distributions here shipped that same top-level name — aimarket-mcp, aimarket-oracle-gateway
+# and (by entry point only) aimarket-mcp-packager — and all three are published, so installing any
+# two into one environment made one silently overwrite the other's server. Measured 2026-07-31:
+# with aimarket-mcp-packager and aimarket-oracle-gateway both installed, `mcp_stdio_server.py` in
+# site-packages was the gateway's 15 897-byte file, so `aimarket-mcp-packager-mcp` launched the
+# ORACLE GATEWAY. And packager alone was worse: its console script named a module its own wheel
+# never contained, so a clean `pip install aimarket-mcp-packager` produced a script that died on
+# `from mcp_stdio_server import main`.
+#
+# Console-script NAMES are unchanged, so every Claude Desktop / Glama config keeps working — only
+# the module path behind them moved. A compatibility shim would have re-created the collision, so
+# there is none: `import mcp_stdio_server` is gone deliberately.
+# Bumped because the tree diverged from the published 0.3.0 wheel: `pip install
+# aimarket-mcp==0.3.0` served code this tree had already moved past, at the same version
+# string, so every fix in it was unpublishable and unreachable.
+version = "0.3.1"
+description = "alexar76 ecosystem MCP gateway — SSRF-hardened web fetch/search + Metis verify (stdio + HTTP)"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [{ name = "alexar76", email = "publish@alexar76.dev" }]
+keywords = ["mcp", "aimarket", "web-fetch", "web-search", "metis", "stdio"]
+dependencies = [
+    # <2, not <4. mcp 2.0.0 removed `mcp.server.fastmcp` — the module this server is built
+    # on — so the console script died on import for anyone installing after that release,
+    # while an existing install with 1.x kept working. The old ceiling was optimism about
+    # a major version that had not shipped yet; this one states what is actually tested.
+    # Raise it deliberately, after porting to whatever replaces FastMCP in 2.x.
+    "mcp>=1.6,<2",
+    "httpx>=0.27,<1",
+    # >=2.7.2, not >=2: mcp 1.6 itself requires pydantic>=2.7.2, so `>=2` was a promise the
+    # resolver could never keep — asking for it produced ResolutionImpossible, not a working
+    # install. Both ends of every range below are now tested by scripts/prerelease.py.
+    "pydantic>=2.7.2,<3",
+    "starlette>=0.37,<2",
+    "uvicorn>=0.30,<1",
+]
+
+[project.urls]
+Homepage = "https://glama.ai/mcp/servers/alexar76/aimarket-mcp"
+Repository = "https://github.com/alexar76/aimarket-mcp"
+Documentation = "https://github.com/alexar76/aimarket-mcp#readme"
+Issues = "https://github.com/alexar76/aimarket-mcp/issues"
+
+[project.scripts]
+# Glama runs: mcp-proxy -- aimarket-mcp  → must be stdio (FastMCP), not HTTP.
+aimarket-mcp = "aimarket_mcp.stdio_server:main"
+aimarket-mcp-http = "aimarket_mcp.server:main"
+aimarket-mcp-stdio = "aimarket_mcp.stdio_server:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "pytest-cov>=5"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["aimarket_mcp"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
