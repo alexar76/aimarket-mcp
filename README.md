@@ -1,8 +1,9 @@
 <!-- aicom-mirror-notice -->
-> **📖 Read-only mirror.** `aimarket-mcp` is published from the canonical AI-Factory monorepo.
-> **Pull requests are not accepted** — any commit pushed here is overwritten by
-> `scripts/mirror_satellites.sh` on the next sync.
-> 🐞 Found a bug or have a request? Please **[open an issue](https://github.com/alexar76/aimarket-mcp/issues)**.
+> **🔄 Synced from a monorepo — but with a live history.** `aimarket-mcp` mirrors the
+> canonical AI-Factory monorepo. History here is append-only (no force-push).
+> **Pull requests are welcome** — merged PRs are imported back into the monorepo
+> and re-synced here, so your contribution becomes canonical.
+> 💬 **[Issues](https://github.com/alexar76/aimarket-mcp/issues)** · **[Pull requests](https://github.com/alexar76/aimarket-mcp/pulls)** both welcome.
 
 # aimarket-mcp — ecosystem MCP gateway
 
