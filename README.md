@@ -28,7 +28,7 @@
 
 > ### 🟢 Just want to try the marketplace? Install nothing.
 > Paste **`https://modelmarket.dev/mcp`** into your MCP client and you have `market_search`
-> + `market_invoke` against the live hub, with a few free trial invokes per caller and a
+> and `market_invoke` against the live hub, with a few free trial invokes per caller and a
 > signed receipt for each — no wallet, no key, no install.
 > → [`docs/hosted-mcp-endpoint.md`](https://github.com/alexar76/aicom/blob/main/docs/hosted-mcp-endpoint.md)
 >
@@ -157,19 +157,20 @@ AIMARKET_MCP_KEY=sk-... AIMARKET_MCP_PRODUCTION=1 aimarket-mcp-http   # :9090
 
 ## Publish on Glama
 
-
-Listing: **[glama.ai/mcp/servers/alexar76/aimarket-mcp](https://glama.ai/mcp/servers/alexar76/aimarket-mcp)**
-
-Same pattern as **[aimarket-oracle-gateway](https://github.com/alexar76/aimarket-oracle-gateway)** (working on Glama): repo-root [`glama.json`](glama.json) + [`Dockerfile`](Dockerfile) + `python -m aimarket_mcp.stdio_server`.
+Listing: [aimarket-mcp](https://glama.ai/mcp/servers/alexar76/aimarket-mcp).
+Glama generates a container from the build settings in its admin panel:
 
 | Field | Value |
-|-------|--------|
-| **Dockerfile** | `Dockerfile` (from repo — **not** Glama debian/uv template) |
-| **Command** | `python -m aimarket_mcp.stdio_server` |
-| **Placeholder parameters** | `{}` |
-| **Pinned SHA** | empty (latest) |
+|-------|-------|
+| Build steps | `["bash scripts/glama_install.sh"]` |
+| CMD arguments | `["mcp-proxy", "--", ".venv/bin/python", "-m", "aimarket_mcp.stdio_server"]` |
+| Placeholder parameters | `{}` |
+| Pinned commit SHA | empty (latest synced commit) |
 
-**Do not use** the auto-generated `debian:trixie-slim` + `uv sync` + `mcp-proxy -- aimarket-mcp` template — that was the broken HTTP/ENOENT path.
+Build, inspect, and publish a release after syncing source changes. A repository
+sync alone does not refresh the deployed tool catalog or its quality evaluation.
+The catalog should contain all five tools listed above.
+See [Glama build and release instructions](docs/GLAMA.md).
 
 ## Consumers
 
@@ -185,18 +186,6 @@ Same pattern as **[aimarket-oracle-gateway](https://github.com/alexar76/aimarket
 ```bash
 pip install -e '.[dev]' && pytest -q
 ```
-
-## Glama
-
-Glama **ignores** repo Dockerfiles — set **Build steps** in
-[admin/dockerfile](https://glama.ai/mcp/servers/alexar76/aimarket-mcp/admin/dockerfile):
-
-```json
-["bash scripts/glama_install.sh"]
-```
-
-CMD: `[".venv/bin/python", "-m", "aimarket_mcp.stdio_server"]`. Pin **`main`** or tag **`glama-build`** (not a
-fixed SHA). Details: [`docs/GLAMA.md`](docs/GLAMA.md).
 
 ## Registries
 

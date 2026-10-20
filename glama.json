@@ -2,7 +2,7 @@
   "$schema": "https://glama.ai/mcp/schemas/server.json",
   "maintainers": ["alexar76"],
   "name": "aimarket-mcp",
-  "description": "MCP server (stdio): alexar76 ecosystem gateway — SSRF-hardened web_fetch, web_search, metis_verify.",
+  "description": "Discover and invoke AI services on AIMarket with prices and signed receipts, fetch public web pages, search the web, and request Metis verification. Five MCP tools.",
   "repository": "https://github.com/alexar76/aimarket-mcp",
   "dockerfile": "Dockerfile.glama",
   "command": [".venv/bin/python", "-m", "aimarket_mcp.stdio_server"]

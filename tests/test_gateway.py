@@ -112,8 +112,18 @@ def test_extract_main_text_drops_scripts_keeps_prose():
     assert "evil" not in text and "Hello world." in text and "Second para." in text
 
 
-def test_validate_url_rejects_private_and_bad_scheme():
-    for bad in ("http://127.0.0.1/", "http://localhost/", "file:///etc/passwd", "ftp://x/"):
+def test_validate_url_rejects_private_and_bad_scheme(monkeypatch):
+    import socket
+
+    # Keep this a unit test: a sandbox's DNS availability must not decide its result.
+    monkeypatch.setattr(
+        socket, "getaddrinfo",
+        lambda *a, **k: [(2, 1, 6, "", ("93.184.216.34", 443))],
+    )
+    for bad in (
+        "http://127.0.0.1/", "http://10.0.0.1/", "http://169.254.169.254/",
+        "http://[::1]/", "http://localhost/", "file:///etc/passwd", "ftp://x/",
+    ):
         with pytest.raises(ValueError):
             validate_url(bad)
     assert validate_url("https://example.com/x") == "https://example.com/x"

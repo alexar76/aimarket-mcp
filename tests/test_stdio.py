@@ -1,4 +1,4 @@
-"""Stdio MCP smoke — Glama entrypoint imports and exposes the three gateway tools."""
+"""Stdio MCP smoke — Glama entrypoint exposes the complete gateway catalog."""
 from __future__ import annotations
 
 import importlib
@@ -15,4 +15,7 @@ def test_stdio_tools_registered():
 
     tools = stdio.mcp._tool_manager._tools  # FastMCP internal registry
     names = set(tools.keys())
-    assert {"web_fetch_tool", "web_search_tool", "metis_verify_tool"} <= names
+    assert names == {
+        "web_fetch_tool", "web_search_tool", "metis_verify_tool",
+        "market_search_tool", "market_invoke_tool",
+    }
