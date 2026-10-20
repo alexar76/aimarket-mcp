@@ -17,6 +17,8 @@ import urllib.parse
 import uuid
 from typing import Any, Dict, List
 
+import httpx
+
 from . import __version__
 from .security import safe_get, safe_post, sanitize_tool_output, extract_main_text, validate_url
 
@@ -107,10 +109,44 @@ async def metis_verify(args: Dict[str, Any]) -> str:
     headers = {"Content-Type": "application/json"}
     if METIS_KEY:
         headers["Authorization"] = f"Bearer {METIS_KEY}"
-    resp = await safe_post(f"{METIS_URL}/v1/verify", json={"input": inp, "route": route},
-                           headers=headers, timeout=200.0)
-    resp.raise_for_status()
-    d = resp.json()
+    url = f"{METIS_URL}/v1/verify"
+    status = None
+    try:
+        resp = await safe_post(url, json={"input": inp, "route": route},
+                               headers=headers, timeout=200.0)
+        status = resp.status_code
+        resp.raise_for_status()
+        d = resp.json()
+        if not isinstance(d, dict):
+            raise ValueError("Expected a JSON object")
+    except (httpx.HTTPError, ValueError) as exc:
+        # Never echo exception messages, response bodies, credentials, or query
+        # strings: all can contain secrets supplied by the caller or upstream.
+        try:
+            parsed = urllib.parse.urlsplit(url)
+            host = parsed.hostname or ""
+            if ":" in host:
+                host = f"[{host}]"
+            port = f":{parsed.port}" if parsed.port else ""
+            public_url = urllib.parse.urlunsplit(
+                (parsed.scheme, host + port, parsed.path, "", "")
+            )
+        except ValueError:
+            public_url = "(invalid AIMARKET_METIS_URL)"
+        kind = (
+            "timeout" if isinstance(exc, httpx.TimeoutException)
+            else "http_status" if isinstance(exc, httpx.HTTPStatusError)
+            else "connection" if isinstance(exc, httpx.RequestError)
+            else "invalid_response" if status is not None
+            else "invalid_endpoint"
+        )
+        raise ValueError(json.dumps({
+            "error": "metis_verify_failed",
+            "reason": kind,
+            "url": public_url,
+            "status_code": status,
+            "hint": "Check AIMARKET_METIS_URL and network access; check AIMARKET_METIS_KEY for 401/403.",
+        })) from None
     answer = d.get("answer", "")
     meta = (f"[verify_score={d.get('verify_score')} status={d.get('status')} "
             f"route={d.get('route')} verified={d.get('verified')}]")

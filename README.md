@@ -174,6 +174,8 @@ See [Glama build and release instructions](docs/GLAMA.md).
 
 ## Consumers
 
+- Connected successfully? Share your host, configuration, and one working tool using
+  the [Show and tell template](docs/show-and-tell-template.md).
 - **Metis** — enable the preset:
   ```yaml
   enable_mcp_tools: true
@@ -188,6 +190,9 @@ pip install -e '.[dev]' && pytest -q
 ```
 
 ## Registries
+
+See the [directory submission checklist and current status](docs/REGISTRIES.md)
+before submitting or refreshing a listing.
 
 | Registry | Listing |
 |----------|---------|
