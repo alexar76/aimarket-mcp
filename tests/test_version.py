@@ -38,7 +38,7 @@ def test_registry_manifest_matches_pyproject():
 
 async def test_http_serverinfo_and_health_announce_pyproject_version():
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=server.app),
-                                 base_url="http://t") as c:
+                                 base_url="http://127.0.0.1:9090") as c:
         r = await c.post("/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "initialize",
                                        "params": {"protocolVersion": "2025-03-26"}})
         frame = next(line for line in r.text.splitlines() if line.startswith("data:"))

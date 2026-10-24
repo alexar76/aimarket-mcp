@@ -11,7 +11,7 @@
 
 <!-- aicom-readme-badges -->
 <p align="center">
-  <a href="https://github.com/alexar76/aimarket-mcp/actions/workflows/ci.yml"><img src="https://raw.githubusercontent.com/alexar76/aimarket-mcp/refs/heads/main/docs/badges/ci.svg" alt="CI" /></a>
+  <a href="https://github.com/alexar76/aimarket-mcp/actions/workflows/ci.yml"><img src="https://github.com/alexar76/aimarket-mcp/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="https://glama.ai/mcp/servers/alexar76/aimarket-mcp"><img src="https://glama.ai/mcp/servers/alexar76/aimarket-mcp/badges/score.svg" alt="aimarket-mcp MCP server" /></a>
   <img src="https://raw.githubusercontent.com/alexar76/aimarket-mcp/refs/heads/main/docs/badges/mcp.svg" alt="MCP gateway" />
   <img src="https://raw.githubusercontent.com/alexar76/aimarket-mcp/refs/heads/main/docs/badges/transport.svg" alt="stdio + HTTP" />
@@ -21,7 +21,7 @@
 </p>
 <!-- /aicom-readme-badges -->
 
-> 🌐 **English** · [Русский](docs/README.ru.md) · [Español](docs/README.es.md) · [Français](docs/README.fr.md) · [中文](docs/README.zh.md) · [Glossary](https://github.com/alexar76/aicom/blob/main/docs/localization-glossary.md)
+> 🌐 **English** · [Русский](https://github.com/alexar76/aimarket-mcp/blob/main/docs/README.ru.md) · [Español](https://github.com/alexar76/aimarket-mcp/blob/main/docs/README.es.md) · [Français](https://github.com/alexar76/aimarket-mcp/blob/main/docs/README.fr.md) · [中文](https://github.com/alexar76/aimarket-mcp/blob/main/docs/README.zh.md) · [Glossary](https://github.com/alexar76/aicom/blob/main/docs/localization-glossary.md)
 
 
 
@@ -60,6 +60,7 @@ Compatible hosts: Claude Desktop, Cursor, Glama, and any MCP client that support
 | `metis_verify` | Metis cognition + verification envelope | returns answer + `verify_score` / `verified` gate |
 | `market_search` | Discover priced capabilities on an AIMarket hub | free; no wallet, key or channel; the hub lists only what it can execute |
 | `market_invoke` | Run one on the hub's free trial tier | returns the signed receipt nonce; reports the hub's 402 verbatim when the allowance is spent |
+| `market_status` | Show the free trial invokes and prepaid balance left | read-only; the hub's health, this installation's remaining trial in the current window, and the `AIMARKET_API_KEY` balance when set (never the key) |
 
 ### Example — buy a GAIA Open-Meteo reading
 
@@ -100,7 +101,9 @@ Why a gateway (not per-agent tools): generic capabilities are written **once**; 
 | `AIMARKET_HUB_URL` | AIMarket hub for `market_search` / `market_invoke` (default `https://modelmarket.dev`) |
 | `AIMARKET_API_KEY` | Credit-account key from the hub's `/start` page (`https://modelmarket.dev/start`): priced `market_invoke` calls are paid from its prepaid balance; while it is short the free trial still applies. In HTTP mode it pays for every caller of that server |
 | `AIMARKET_SANDBOX_VISITOR` | Trial identity for `market_invoke`; random per install, set it to keep an allowance across reinstalls |
-| `AIMARKET_MCP_KEY` | HTTP only — bearer auth key |
+| `AIMARKET_MCP_KEY` | HTTP only — bearer auth key. Without one the server answers only callers on this machine: a loopback packet with a loopback `Host`, no forwarding headers, and no cross-site browser `Origin`. Behind a reverse proxy, or in the HTTP Docker image (callers arrive from the bridge), set a key or `AIMARKET_MCP_PUBLIC=1`, or every call gets 401 |
+| `AIMARKET_MCP_PUBLIC` | HTTP only — `1` answers anonymous callers from anywhere, without a key (an explicit choice for a public endpoint) |
+| `AIMARKET_MCP_HOST` | HTTP only — listen address (default `127.0.0.1`; the HTTP image sets `0.0.0.0`) |
 | `AIMARKET_MCP_PRODUCTION` | HTTP only — `1` requires `AIMARKET_MCP_KEY` (fail-closed) |
 | `AIMARKET_MCP_RATE` | HTTP only — requests/min per key/IP (default 120) |
 | `AIMARKET_MCP_PORT` | HTTP only — listen port (default 9090) |
@@ -169,13 +172,13 @@ Glama generates a container from the build settings in its admin panel:
 
 Build, inspect, and publish a release after syncing source changes. A repository
 sync alone does not refresh the deployed tool catalog or its quality evaluation.
-The catalog should contain all five tools listed above.
-See [Glama build and release instructions](docs/GLAMA.md).
+The catalog should contain all six tools listed above.
+See [Glama build and release instructions](https://github.com/alexar76/aimarket-mcp/blob/main/docs/GLAMA.md).
 
 ## Consumers
 
 - Connected successfully? Share your host, configuration, and one working tool using
-  the [Show and tell template](docs/show-and-tell-template.md).
+  the [Show and tell template](https://github.com/alexar76/aimarket-mcp/blob/main/docs/show-and-tell-template.md).
 - **Metis** — enable the preset:
   ```yaml
   enable_mcp_tools: true
@@ -191,7 +194,7 @@ pip install -e '.[dev]' && pytest -q
 
 ## Registries
 
-See the [directory submission checklist and current status](docs/REGISTRIES.md)
+See the [directory submission checklist and current status](https://github.com/alexar76/aimarket-mcp/blob/main/docs/REGISTRIES.md)
 before submitting or refreshing a listing.
 
 | Registry | Listing |

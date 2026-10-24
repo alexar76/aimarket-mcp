@@ -7,13 +7,13 @@
     "url": "https://github.com/alexar76/aimarket-mcp",
     "source": "github"
   },
-  "version": "0.4.1",
+  "version": "0.6.1",
   "packages": [
     {
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "aimarket-mcp",
-      "version": "0.4.1",
+      "version": "0.6.1",
       "transport": {
         "type": "stdio"
       },

@@ -58,6 +58,10 @@ async def _rpc(client, method, params=None, _id=1, headers=None):
 def captured_visitors(monkeypatch):
     """Capture the trial identity each invoke actually presents to the hub."""
     seen: list = []
+    # Callers from outside the machine: a hosted deployment, which answers them only when
+    # opened explicitly (no key, AIMARKET_MCP_PUBLIC=1).
+    monkeypatch.setattr(server, "_API_KEY", "")
+    monkeypatch.setattr(server, "_PUBLIC", True)
 
     async def fake_post(url, json=None, headers=None, **kwargs):  # noqa: A002 - mirrors safe_post
         seen.append((headers or {}).get("X-AIMarket-Sandbox-Visitor"))
@@ -263,6 +267,9 @@ async def test_health_reports_the_mode_a_canary_can_check(monkeypatch):
 # --- rate limiting: per caller, not per proxy --------------------------------------------
 
 async def test_rate_limit_counts_callers_separately_behind_a_proxy(monkeypatch):
+    # Callers through a proxy are a hosted deployment: answered only when opened explicitly.
+    monkeypatch.setattr(server, "_API_KEY", "")
+    monkeypatch.setattr(server, "_PUBLIC", True)
     monkeypatch.setattr(server, "_RL_PER_MIN", 2)
     monkeypatch.setattr(server, "_buckets", {})
     async with _client("127.0.0.1") as proxied:

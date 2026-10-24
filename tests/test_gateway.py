@@ -15,7 +15,7 @@ from aimarket_mcp.security import sanitize_tool_output, extract_main_text, valid
 
 
 def _client():
-    return httpx.AsyncClient(transport=httpx.ASGITransport(app=server.app), base_url="http://t")
+    return httpx.AsyncClient(transport=httpx.ASGITransport(app=server.app), base_url="http://127.0.0.1:9090")
 
 
 def _parse_sse(text: str) -> dict:
@@ -89,6 +89,52 @@ async def test_auth_open_in_dev_without_key(monkeypatch):
     monkeypatch.setattr(server, "_PRODUCTION", False)
     async with _client() as c:
         assert (await _rpc(c, "tools/list")).status_code == 200
+
+
+async def test_dev_without_key_answers_loopback_only(monkeypatch):
+    # GCVE-110-PYPI-2026-018883: with no key the server answered every peer on 0.0.0.0.
+    monkeypatch.setattr(server, "_API_KEY", "")
+    monkeypatch.setattr(server, "_PRODUCTION", False)
+    monkeypatch.setattr(server, "_PUBLIC", False)
+    for peer, want in (("10.0.0.7", 401), ("172.17.0.1", 401), ("203.0.113.9", 401),
+                       ("127.0.0.1", 200), ("::1", 200)):
+        transport = httpx.ASGITransport(app=server.app, client=(peer, 40000))
+        async with httpx.AsyncClient(transport=transport, base_url="http://127.0.0.1:9090") as c:
+            r = await _rpc(c, "tools/list")
+            assert r.status_code == want, peer
+            # A forwarding header means a proxy relayed someone else's request: refused even
+            # from loopback (nginx on the same host), and never trusted to make a peer local.
+            r = await _rpc(c, "tools/list", headers={"X-Forwarded-For": "127.0.0.1"})
+            assert r.status_code == 401, peer
+
+
+@pytest.mark.parametrize("headers,want", [
+    ({}, 200),
+    ({"Host": "localhost:9090"}, 200),
+    ({"Origin": "http://localhost:5173"}, 200),
+    ({"Origin": "https://evil.example", "Content-Type": "text/plain"}, 401),
+    ({"Origin": "null"}, 401),
+    ({"Host": "rebind.evil.example:9090"}, 401),
+])
+async def test_keyless_loopback_refuses_browser_pages_and_rebinding(monkeypatch, headers, want):
+    # Independent review of GCVE-110-PYPI-2026-018883: a page in the local user's browser
+    # reached tools/call on 127.0.0.1 (open CORS, text/plain body), and so did a rebinding name.
+    monkeypatch.setattr(server, "_API_KEY", "")
+    monkeypatch.setattr(server, "_PRODUCTION", False)
+    monkeypatch.setattr(server, "_PUBLIC", False)
+    transport = httpx.ASGITransport(app=server.app, client=("127.0.0.1", 40000))
+    async with httpx.AsyncClient(transport=transport, base_url="http://127.0.0.1:9090") as c:
+        r = await _rpc(c, "tools/list", headers=headers)
+        assert r.status_code == want, headers
+
+
+def test_http_server_binds_loopback_by_default(monkeypatch):
+    seen = {}
+    import uvicorn
+    monkeypatch.delenv("AIMARKET_MCP_HOST", raising=False)
+    monkeypatch.setattr(uvicorn, "run", lambda app, **kw: seen.update(kw))
+    server.main()
+    assert seen["host"] == "127.0.0.1"
 
 
 async def test_auth_fail_closed_in_production_without_key(monkeypatch):

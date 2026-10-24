@@ -71,7 +71,7 @@ async def test_metis_failure_is_a_protocol_tool_error(monkeypatch):
 
     monkeypatch.setattr(tools, "safe_post", fake_post)
     async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=server.app), base_url="http://test",
+        transport=httpx.ASGITransport(app=server.app), base_url="http://127.0.0.1:9090",
     ) as client:
         response = await client.post("/mcp", json={
             "jsonrpc": "2.0", "id": 1, "method": "tools/call",

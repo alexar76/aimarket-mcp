@@ -13,6 +13,7 @@ import ipaddress
 import json
 import os
 import secrets
+import sys
 import time
 from typing import Any, Dict
 
@@ -160,11 +161,57 @@ def _ok(req_id, result: Dict[str, Any]) -> Dict[str, Any]:
 def _auth_ok(request: Request) -> bool:
     # fail-closed like metis: if a key is configured (or production), require a matching bearer
     if not _API_KEY:
-        return _PUBLIC or not _PRODUCTION
+        if _PUBLIC:
+            return True
+        # No key and no explicit opt-in: the machine's own user only. Answering any peer
+        # here was an open MCP gateway for whoever could reach the port
+        # (Vulnetix GCVE-110-PYPI-2026-018883, CWE-306). A loopback packet is not enough on
+        # its own: a web page in that user's browser can POST here too (CORS is open and the
+        # body is read whatever its content type), and a rebinding name can point at 127.0.0.1.
+        # So the Host must be a loopback name, a browser's Origin, if any, a loopback page, and
+        # the request must not have come through a proxy: behind nginx on the same host every
+        # caller's packet is from 127.0.0.1, and nginx sends the backend's own Host by default.
+        return (not _PRODUCTION and _peer_is_loopback(request)
+                and _is_loopback_name(request.headers.get("host", ""))
+                and _origin_is_local(request.headers.get("origin"))
+                and not any(h in request.headers for h in _FORWARDING_HEADERS))
     header = request.headers.get("authorization", "")
     if not header.lower().startswith("bearer "):
         return False
     return secrets.compare_digest(header[7:].strip(), _API_KEY)
+
+
+def _peer_is_loopback(request: Request) -> bool:
+    """The packet's own source, never a forwarding header: a loopback proxy in front would
+    make every caller look local, so behind one a key or AIMARKET_MCP_PUBLIC is needed."""
+    peer = request.client.host if request.client else ""
+    try:
+        return ipaddress.ip_address(peer).is_loopback
+    except ValueError:
+        return False
+
+
+_LOOPBACK_NAMES = frozenset({"localhost", "127.0.0.1", "::1"})
+_FORWARDING_HEADERS = ("x-forwarded-for", "x-real-ip", "forwarded", "x-forwarded-host")
+
+
+def _is_loopback_name(hostport: str) -> bool:
+    """`localhost[:port]`, `127.0.0.1[:port]` or `[::1][:port]`, as a Host header or netloc."""
+    value = hostport.strip().lower()
+    if value.startswith("["):
+        host = value[1:value.find("]")] if "]" in value else ""
+    else:
+        host = value.rsplit(":", 1)[0] if value.count(":") == 1 else value
+    return host in _LOOPBACK_NAMES
+
+
+def _origin_is_local(origin: str | None) -> bool:
+    """No Origin (a CLI or an MCP client, not a browser page), or a page served from loopback.
+    `null` (a sandboxed frame, a file) is a browser too, and is refused."""
+    if origin is None:
+        return True
+    scheme, _, rest = origin.strip().partition("://")
+    return scheme in ("http", "https") and _is_loopback_name(rest.split("/", 1)[0])
 
 
 def _rate_ok(key: str) -> bool:
@@ -296,7 +343,11 @@ app = Starlette(middleware=_middleware, routes=[
 def main() -> None:
     import uvicorn
     port = int(os.environ.get("AIMARKET_MCP_PORT", "9090"))
-    host = os.environ.get("AIMARKET_MCP_HOST", "0.0.0.0")
+    # Loopback unless told otherwise; the HTTP image sets 0.0.0.0 for its port mapping.
+    host = os.environ.get("AIMARKET_MCP_HOST", "127.0.0.1")
+    if not _API_KEY and not _PUBLIC:
+        print("aimarket-mcp: no AIMARKET_MCP_KEY — answering loopback callers only "
+              "(set a key, or AIMARKET_MCP_PUBLIC=1 to answer anyone)", file=sys.stderr)
     # proxy_headers=False on purpose. Uvicorn's own handling rewrites request.client from
     # the LEFTMOST X-Forwarded-For entry, which is the one value a caller can put there
     # itself — every trial allowance and rate limit keyed on the client address would then
