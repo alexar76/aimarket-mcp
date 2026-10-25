@@ -75,6 +75,32 @@ async def test_unknown_tool_is_invalid_params():
         assert "error" in _parse_sse(r.text)
 
 
+async def test_rpc_rejects_an_oversized_declared_body(monkeypatch):
+    monkeypatch.setattr(server, "_MAX_RPC_BYTES", 64)
+    async with _client() as c:
+        response = await c.post("/mcp", content=b"x" * 65)
+    assert response.status_code == 413
+
+
+async def test_rpc_limits_a_stream_without_content_length(monkeypatch):
+    monkeypatch.setattr(server, "_MAX_RPC_BYTES", 64)
+
+    async def body():
+        yield b"x" * 40
+        yield b"y" * 40
+        raise AssertionError("oversized request should stop being read")
+
+    async with _client() as c:
+        response = await c.post("/mcp", content=body())
+    assert response.status_code == 413
+
+
+async def test_rpc_rejects_non_object_json():
+    async with _client() as c:
+        response = await c.post("/mcp", json=[])
+    assert _parse_sse(response.text)["error"]["code"] == -32600
+
+
 async def test_auth_required_when_key_configured(monkeypatch):
     monkeypatch.setattr(server, "_API_KEY", "s3cret")
     async with _client() as c:

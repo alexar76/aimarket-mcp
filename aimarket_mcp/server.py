@@ -88,6 +88,7 @@ _VISITOR_SALT = os.environ.get("AIMARKET_MCP_VISITOR_SALT", "") or secrets.token
 # rate limit: token bucket per client key/IP
 _RL_PER_MIN = int(os.environ.get("AIMARKET_MCP_RATE", "120"))
 _buckets: Dict[str, list] = {}
+_MAX_RPC_BYTES = 1_000_000
 
 
 def _peer_is_trusted(peer: str) -> bool:
@@ -240,10 +241,30 @@ async def handle_rpc(request: Request) -> Response:
     if not _rate_ok(client_key[:64]):
         return JSONResponse({"error": "rate limited"}, status_code=429)
 
+    # Enforce the ceiling while receiving, even without Content-Length. JSON
+    # parsing and tool admission must not first buffer an arbitrarily large POST.
+    declared = request.headers.get("content-length")
+    if declared is not None:
+        try:
+            length = int(declared)
+        except ValueError:
+            return JSONResponse({"error": "invalid content length"}, status_code=400)
+        if length < 0:
+            return JSONResponse({"error": "invalid content length"}, status_code=400)
+        if length > _MAX_RPC_BYTES:
+            return JSONResponse({"error": "request too large"}, status_code=413)
+    body = bytearray()
+    async for chunk in request.stream():
+        if len(body) + len(chunk) > _MAX_RPC_BYTES:
+            return JSONResponse({"error": "request too large"}, status_code=413)
+        body.extend(chunk)
     try:
-        msg = await request.json()
+        msg = json.loads(body)
     except Exception:
         return _sse(_err(None, -32700, "Parse error"))
+
+    if not isinstance(msg, dict):
+        return _sse(_err(None, -32600, "Invalid Request"))
 
     method = msg.get("method")
     req_id = msg.get("id")
