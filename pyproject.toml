@@ -16,7 +16,7 @@ name = "aimarket-mcp"
 # Bumped because the tree diverged from the published 0.3.0 wheel: `pip install
 # aimarket-mcp==0.3.0` served code this tree had already moved past, at the same version
 # string, so every fix in it was unpublishable and unreachable.
-version = "0.6.2"
+version = "0.6.3"
 description = "alexar76 ecosystem MCP gateway — SSRF-hardened web fetch/search + Metis verify (stdio + HTTP)"
 readme = "README.md"
 license = { text = "MIT" }

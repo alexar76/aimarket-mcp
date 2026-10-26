@@ -170,12 +170,14 @@ def _auth_ok(request: Request) -> bool:
         # its own: a web page in that user's browser can POST here too (CORS is open and the
         # body is read whatever its content type), and a rebinding name can point at 127.0.0.1.
         # So the Host must be a loopback name, a browser's Origin, if any, a loopback page, and
-        # the request must not have come through a proxy: behind nginx on the same host every
-        # caller's packet is from 127.0.0.1, and nginx sends the backend's own Host by default.
+        # the request must not have come through a proxy. A forwarding header shows one; nginx's
+        # default proxy_pass sends none and a loopback Host, so on Linux the caller's socket
+        # must also belong to this server's own user (_caller_is_this_user).
         return (not _PRODUCTION and _peer_is_loopback(request)
                 and _is_loopback_name(request.headers.get("host", ""))
                 and _origin_is_local(request.headers.get("origin"))
-                and not any(h in request.headers for h in _FORWARDING_HEADERS))
+                and not any(h in request.headers for h in _FORWARDING_HEADERS)
+                and _caller_is_this_user(request))
     header = request.headers.get("authorization", "")
     if not header.lower().startswith("bearer "):
         return False
@@ -183,8 +185,8 @@ def _auth_ok(request: Request) -> bool:
 
 
 def _peer_is_loopback(request: Request) -> bool:
-    """The packet's own source, never a forwarding header: a loopback proxy in front would
-    make every caller look local, so behind one a key or AIMARKET_MCP_PUBLIC is needed."""
+    """The packet's own source, never a forwarding header. A proxy on this machine sends
+    loopback packets too; _caller_is_this_user is what tells most of them apart."""
     peer = request.client.host if request.client else ""
     try:
         return ipaddress.ip_address(peer).is_loopback
@@ -194,6 +196,66 @@ def _peer_is_loopback(request: Request) -> bool:
 
 _LOOPBACK_NAMES = frozenset({"localhost", "127.0.0.1", "::1"})
 _FORWARDING_HEADERS = ("x-forwarded-for", "x-real-ip", "forwarded", "x-forwarded-host")
+
+# The kernel's tables of TCP sockets, with the uid that owns each (Linux).
+_PROC_NET_TCP = ("/proc/net/tcp", "/proc/net/tcp6")
+
+
+def _proc_endpoint(field: str) -> tuple[str, int]:
+    """`0100007F:1F90` -> ("127.0.0.1", 8080): each 32-bit word of the address is printed in
+    the kernel's byte order, the port in plain hex."""
+    hexaddr, _, hexport = field.partition(":")
+    raw = bytes.fromhex(hexaddr)
+    if sys.byteorder == "little":
+        raw = b"".join(raw[i:i + 4][::-1] for i in range(0, len(raw), 4))
+    addr = ipaddress.ip_address(raw)
+    if addr.version == 6 and addr.ipv4_mapped:
+        addr = addr.ipv4_mapped
+    return str(addr), int(hexport, 16)
+
+
+def _caller_is_this_user(conn: Any) -> bool:
+    """The caller's socket belongs to the user this server runs as.
+
+    A reverse proxy on this machine connects over loopback too, and nginx's default proxy_pass
+    sends the upstream's own Host (127.0.0.1:port) and no forwarding header, so nothing in the
+    request tells it from a local client (Vulnetix, on GCVE-110-PYPI-2026-018883). Its workers
+    run as their own user, and on Linux the kernel records which user owns each socket. A proxy
+    running as this same user, or a system without the table (macOS, Windows), still needs a key
+    to be told apart. A connection the table does not show is refused."""
+    tables = [p for p in _PROC_NET_TCP if os.path.exists(p)]
+    if not tables:
+        return True
+    client = conn.client
+    if not client:
+        return False
+    try:
+        peer = ipaddress.ip_address(client.host)
+    except ValueError:
+        return False
+    if peer.version == 6 and peer.ipv4_mapped:
+        peer = peer.ipv4_mapped
+    want = (str(peer), int(client.port or 0))
+    server_port = (conn.scope.get("server") or (None, None))[1]
+    for path in tables:
+        try:
+            with open(path, encoding="ascii", errors="replace") as fh:
+                next(fh, None)  # the header line
+                for line in fh:
+                    f = line.split()
+                    if len(f) < 8 or f[3] != "01":  # 01 = ESTABLISHED
+                        continue
+                    try:
+                        if _proc_endpoint(f[1]) != want:
+                            continue
+                        if server_port is not None and _proc_endpoint(f[2])[1] != int(server_port):
+                            continue
+                        return int(f[7]) == os.geteuid()
+                    except ValueError:
+                        continue
+        except OSError:
+            continue
+    return False
 
 
 def _is_loopback_name(hostport: str) -> bool:
@@ -367,8 +429,9 @@ def main() -> None:
     # Loopback unless told otherwise; the HTTP image sets 0.0.0.0 for its port mapping.
     host = os.environ.get("AIMARKET_MCP_HOST", "127.0.0.1")
     if not _API_KEY and not _PUBLIC:
-        print("aimarket-mcp: no AIMARKET_MCP_KEY — answering loopback callers only "
-              "(set a key, or AIMARKET_MCP_PUBLIC=1 to answer anyone)", file=sys.stderr)
+        print("aimarket-mcp: no AIMARKET_MCP_KEY — answering this machine's user only "
+              "(set a key, or AIMARKET_MCP_PUBLIC=1 to answer anyone; behind a reverse proxy, "
+              "set a key)", file=sys.stderr)
     # proxy_headers=False on purpose. Uvicorn's own handling rewrites request.client from
     # the LEFTMOST X-Forwarded-For entry, which is the one value a caller can put there
     # itself — every trial allowance and rate limit keyed on the client address would then

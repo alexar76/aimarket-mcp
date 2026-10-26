@@ -6,6 +6,10 @@ and proves the security core (SSRF block, sanitization) and auth actually bite.
 from __future__ import annotations
 
 import json
+import os
+import socket
+import sys
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -152,6 +156,65 @@ async def test_keyless_loopback_refuses_browser_pages_and_rebinding(monkeypatch,
     async with httpx.AsyncClient(transport=transport, base_url="http://127.0.0.1:9090") as c:
         r = await _rpc(c, "tools/list", headers=headers)
         assert r.status_code == want, headers
+
+
+_TABLE_HEADER = ("  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt"
+                 "   uid  timeout inode\n")
+
+
+def _table(tmp_path, uid: int | None) -> tuple[str]:
+    """A /proc/net/tcp with the caller's end of 127.0.0.1:40000 -> 127.0.0.1:9090 owned by
+    `uid`, beside the server's end (owned by us), or without the caller's end at all."""
+    lines = [_TABLE_HEADER,
+             f"   0: 0100007F:2382 0100007F:9C40 01 00000000:00000000 00:00000000 00000000"
+             f"  {os.geteuid()}        0 2001 1 0000000000000000 20 4 30 10 -1\n"]
+    if uid is not None:
+        lines.append(f"   1: 0100007F:9C40 0100007F:2382 01 00000000:00000000 00:00000000 00000000"
+                     f"  {uid}        0 2002 1 0000000000000000 20 4 30 10 -1\n")
+    path = tmp_path / "tcp"
+    path.write_text("".join(lines))
+    return (str(path),)
+
+
+@pytest.mark.skipif(sys.byteorder != "little", reason="the table prints words in host order")
+def test_proc_endpoint_reads_the_kernel_format():
+    assert server._proc_endpoint("0100007F:1F90") == ("127.0.0.1", 8080)
+    assert server._proc_endpoint("00000000000000000000000001000000:9C40") == ("::1", 40000)
+    assert server._proc_endpoint("0000000000000000FFFF00000100007F:0050") == ("127.0.0.1", 80)
+
+
+@pytest.mark.skipif(not hasattr(os, "geteuid") or sys.byteorder != "little", reason="POSIX table")
+@pytest.mark.parametrize("owner,want", [("self", 200), ("other", 401), ("absent", 401)])
+async def test_keyless_loopback_refuses_a_proxy_running_as_another_user(monkeypatch, tmp_path,
+                                                                        owner, want):
+    # Vulnetix, on GCVE-110-PYPI-2026-018883: nginx's default proxy_pass on the same host sends a
+    # loopback Host and no forwarding header, so the keyless server answered whoever reached
+    # nginx. Its workers run as their own user; the kernel says who owns the caller's socket.
+    monkeypatch.setattr(server, "_API_KEY", "")
+    monkeypatch.setattr(server, "_PRODUCTION", False)
+    monkeypatch.setattr(server, "_PUBLIC", False)
+    uid = {"self": os.geteuid(), "other": os.geteuid() + 1, "absent": None}[owner]
+    monkeypatch.setattr(server, "_PROC_NET_TCP", _table(tmp_path, uid))
+    transport = httpx.ASGITransport(app=server.app, client=("127.0.0.1", 40000))
+    async with httpx.AsyncClient(transport=transport, base_url="http://127.0.0.1:9090") as c:
+        assert (await _rpc(c, "tools/list")).status_code == want
+
+
+@pytest.mark.skipif(not os.path.exists("/proc/net/tcp"), reason="Linux socket table only")
+def test_socket_owner_comes_from_the_real_kernel_table(monkeypatch):
+    monkeypatch.setattr(server, "_PROC_NET_TCP", ("/proc/net/tcp", "/proc/net/tcp6"))
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        with socket.create_connection(listener.getsockname()) as caller:
+            accepted, _ = listener.accept()
+            with accepted:
+                host, port = caller.getsockname()
+                conn = SimpleNamespace(client=SimpleNamespace(host=host, port=port),
+                                       scope={"server": listener.getsockname()})
+                assert server._caller_is_this_user(conn)
+                monkeypatch.setattr(os, "geteuid", lambda: 4242424)
+                assert not server._caller_is_this_user(conn)
 
 
 def test_http_server_binds_loopback_by_default(monkeypatch):
