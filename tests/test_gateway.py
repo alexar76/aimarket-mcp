@@ -17,6 +17,8 @@ import pytest
 from aimarket_mcp import server
 from aimarket_mcp.security import sanitize_tool_output, extract_main_text, validate_url
 
+pytestmark = pytest.mark.usefixtures("local_http_opt_in")
+
 
 def _client():
     return httpx.AsyncClient(transport=httpx.ASGITransport(app=server.app), base_url="http://127.0.0.1:9090")
@@ -114,7 +116,7 @@ async def test_auth_required_when_key_configured(monkeypatch):
         assert r2.status_code == 200
 
 
-async def test_auth_open_in_dev_without_key(monkeypatch):
+async def test_auth_open_in_dev_with_explicit_local_opt_in(monkeypatch):
     monkeypatch.setattr(server, "_API_KEY", "")
     monkeypatch.setattr(server, "_PRODUCTION", False)
     async with _client() as c:
@@ -200,6 +202,36 @@ async def test_keyless_loopback_refuses_a_proxy_running_as_another_user(monkeypa
         assert (await _rpc(c, "tools/list")).status_code == want
 
 
+@pytest.mark.skipif(not hasattr(os, "geteuid") or sys.byteorder != "little", reason="POSIX table")
+async def test_keyless_loopback_takes_this_users_relay_only_when_the_operator_says_so(monkeypatch, tmp_path):
+    # Vulnetix GCVE-110-VULN-PYPI-2026-000640: a reverse proxy running as the server's own user
+    # passed the owner check. It is remote now, unless the operator opts in.
+    monkeypatch.setattr(server, "_PROC_NET_TCP", _table(tmp_path, os.geteuid()))
+    monkeypatch.setattr(server, "_API_KEY", "")
+    monkeypatch.setattr(server, "_PRODUCTION", False)
+    monkeypatch.setattr(server, "_PUBLIC", False)
+    monkeypatch.delenv("AIMARKET_MCP_LOCAL_RELAY", raising=False)
+    transport = httpx.ASGITransport(app=server.app, client=("127.0.0.1", 40000))
+    async with httpx.AsyncClient(transport=transport, base_url="http://127.0.0.1:9090") as c:
+        assert (await _rpc(c, "tools/list")).status_code == 401
+        monkeypatch.setenv("AIMARKET_MCP_LOCAL_RELAY", "1")
+        assert (await _rpc(c, "tools/list")).status_code == 200
+
+
+@pytest.mark.parametrize("relay,unverified,want", [(False, False, 401), (False, True, 401),
+                                                        (True, False, 401), (True, True, 200)])
+async def test_keyless_loopback_without_socket_table_requires_both_opt_ins(monkeypatch, relay, unverified, want):
+    monkeypatch.setattr(server, "_API_KEY", "")
+    monkeypatch.setattr(server, "_PRODUCTION", False)
+    monkeypatch.setattr(server, "_PUBLIC", False)
+    monkeypatch.setattr(server, "_PROC_NET_TCP", ())
+    monkeypatch.setenv("AIMARKET_MCP_LOCAL_RELAY", "1" if relay else "0")
+    monkeypatch.setenv("AIMARKET_MCP_LOCAL_UNVERIFIED", "1" if unverified else "0")
+    transport = httpx.ASGITransport(app=server.app, client=("127.0.0.1", 40000))
+    async with httpx.AsyncClient(transport=transport, base_url="http://127.0.0.1:9090") as c:
+        assert (await _rpc(c, "tools/list")).status_code == want
+
+
 @pytest.mark.skipif(not os.path.exists("/proc/net/tcp"), reason="Linux socket table only")
 def test_socket_owner_comes_from_the_real_kernel_table(monkeypatch):
     monkeypatch.setattr(server, "_PROC_NET_TCP", ("/proc/net/tcp", "/proc/net/tcp6"))
@@ -212,6 +244,9 @@ def test_socket_owner_comes_from_the_real_kernel_table(monkeypatch):
                 host, port = caller.getsockname()
                 conn = SimpleNamespace(client=SimpleNamespace(host=host, port=port),
                                        scope={"server": listener.getsockname()})
+                monkeypatch.delenv("AIMARKET_MCP_LOCAL_RELAY", raising=False)
+                assert not server._caller_is_this_user(conn)
+                monkeypatch.setenv("AIMARKET_MCP_LOCAL_RELAY", "1")
                 assert server._caller_is_this_user(conn)
                 monkeypatch.setattr(os, "geteuid", lambda: 4242424)
                 assert not server._caller_is_this_user(conn)

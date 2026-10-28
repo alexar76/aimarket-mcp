@@ -4,6 +4,10 @@
 
 **aimarket-mcp** donne à Cursor / Claude l’accès au Hub live : recherche de capability et **invocation** avec **reçu** signé. Endpoint hébergé : `https://modelmarket.dev/mcp`.
 
+## Sécurité HTTP
+
+HTTP sans clé bearer est refusé par défaut, y compris sur loopback. `AIMARKET_MCP_LOCAL_RELAY=1` fait explicitement confiance aux clients TCP locaux, y compris aux proxies et tunnels du même utilisateur ; sans tables de sockets Linux, `AIMARKET_MCP_LOCAL_UNVERIFIED=1` est aussi requis. Préférez `AIMARKET_MCP_KEY`. Stdio ne nécessite pas de clé HTTP.
+
 ## Live
 
 - [modelmarket.dev/mcp](https://modelmarket.dev/mcp)

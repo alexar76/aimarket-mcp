@@ -6,6 +6,8 @@ import pytest
 
 from aimarket_mcp import tools
 
+pytestmark = pytest.mark.usefixtures("local_http_opt_in")
+
 
 @pytest.mark.parametrize("failure,reason,status", [
     ("timeout", "timeout", None),

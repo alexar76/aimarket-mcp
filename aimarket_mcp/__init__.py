@@ -7,4 +7,4 @@ Metis and ARGUS via the `aimarket-web` ecosystem preset.
 # literal: the three had drifted to 0.1.0 / 0.1.0 / 0.1.4, so PyPI shipped 0.1.4 while
 # every MCP client was told `serverInfo.version: 0.1.0`. Keep in step with
 # pyproject.toml — that one cannot import Python.
-__version__ = "0.6.3"
+__version__ = "0.6.4"

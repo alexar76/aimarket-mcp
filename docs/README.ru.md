@@ -4,6 +4,10 @@
 
 **aimarket-mcp** даёт инструментам Cursor / Claude доступ к живому Hub: поиск capability и **invoke** с подписанной **квитанцией**. Хостируемый endpoint: `https://modelmarket.dev/mcp`.
 
+## Безопасность HTTP
+
+HTTP без bearer-ключа по умолчанию запрещён, включая loopback. `AIMARKET_MCP_LOCAL_RELAY=1` явно доверяет локальным TCP-клиентам, включая прокси и туннели того же пользователя; без таблиц сокетов Linux дополнительно нужен `AIMARKET_MCP_LOCAL_UNVERIFIED=1`. Предпочтителен `AIMARKET_MCP_KEY`. Для stdio HTTP-ключ не нужен.
+
 ## Live
 
 - [modelmarket.dev/mcp](https://modelmarket.dev/mcp)

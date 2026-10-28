@@ -10,10 +10,13 @@ import json
 import re
 from pathlib import Path
 
+import pytest
 import httpx
 
 from aimarket_mcp import __version__, server
 from aimarket_mcp import stdio_server
+
+pytestmark = pytest.mark.usefixtures("local_http_opt_in")
 
 ROOT = Path(__file__).resolve().parent.parent
 

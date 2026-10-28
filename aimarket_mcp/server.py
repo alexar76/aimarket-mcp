@@ -164,15 +164,10 @@ def _auth_ok(request: Request) -> bool:
     if not _API_KEY:
         if _PUBLIC:
             return True
-        # No key and no explicit opt-in: the machine's own user only. Answering any peer
-        # here was an open MCP gateway for whoever could reach the port
-        # (Vulnetix GCVE-110-PYPI-2026-018883, CWE-306). A loopback packet is not enough on
-        # its own: a web page in that user's browser can POST here too (CORS is open and the
-        # body is read whatever its content type), and a rebinding name can point at 127.0.0.1.
-        # So the Host must be a loopback name, a browser's Origin, if any, a loopback page, and
-        # the request must not have come through a proxy. A forwarding header shows one; nginx's
-        # default proxy_pass sends none and a loopback Host, so on Linux the caller's socket
-        # must also belong to this server's own user (_caller_is_this_user).
+        # Keyless TCP is disabled unless the operator explicitly trusts local relays.
+        # Even a same-user socket can carry a remote request through a custom proxy.
+        # The opt-in still requires a loopback peer/Host, a local browser Origin, no
+        # forwarding headers and the socket-owner checks in _caller_is_this_user.
         return (not _PRODUCTION and _peer_is_loopback(request)
                 and _is_loopback_name(request.headers.get("host", ""))
                 and _origin_is_local(request.headers.get("origin"))
@@ -185,8 +180,7 @@ def _auth_ok(request: Request) -> bool:
 
 
 def _peer_is_loopback(request: Request) -> bool:
-    """The packet's own source, never a forwarding header. A proxy on this machine sends
-    loopback packets too; _caller_is_this_user is what tells most of them apart."""
+    """The packet's own source, never a forwarding header or proof of local origin."""
     peer = request.client.host if request.client else ""
     try:
         return ipaddress.ip_address(peer).is_loopback
@@ -214,18 +208,26 @@ def _proc_endpoint(field: str) -> tuple[str, int]:
     return str(addr), int(hexport, 16)
 
 
-def _caller_is_this_user(conn: Any) -> bool:
-    """The caller's socket belongs to the user this server runs as.
+def _flag(name: str) -> bool:
+    return (os.environ.get(name) or "").strip().lower() in ("1", "true", "yes", "on")
 
-    A reverse proxy on this machine connects over loopback too, and nginx's default proxy_pass
-    sends the upstream's own Host (127.0.0.1:port) and no forwarding header, so nothing in the
-    request tells it from a local client (Vulnetix, on GCVE-110-PYPI-2026-018883). Its workers
-    run as their own user, and on Linux the kernel records which user owns each socket. A proxy
-    running as this same user, or a system without the table (macOS, Windows), still needs a key
-    to be told apart. A connection the table does not show is refused."""
+
+def _caller_is_this_user(conn: Any) -> bool:
+    """Verify ownership only after the operator explicitly trusts local TCP relays.
+
+    A same-user proxy or tunnel can produce exactly the same socket and HTTP request as
+    a local client. Process names and listening sockets cannot prove that a request was
+    not relayed (Vulnetix GCVE-110-VULN-PYPI-2026-000640). Keyless HTTP therefore requires
+    AIMARKET_MCP_LOCAL_RELAY=1, including for direct loopback clients. A configured bearer
+    key is the default way to use HTTP. On hosts without the Linux socket tables,
+    AIMARKET_MCP_LOCAL_UNVERIFIED=1 is also required. A missing connection or wrong UID
+    in an available table is always refused.
+    """
+    if not _flag("AIMARKET_MCP_LOCAL_RELAY"):
+        return False
     tables = [p for p in _PROC_NET_TCP if os.path.exists(p)]
     if not tables:
-        return True
+        return _flag("AIMARKET_MCP_LOCAL_UNVERIFIED")
     client = conn.client
     if not client:
         return False
@@ -243,14 +245,16 @@ def _caller_is_this_user(conn: Any) -> bool:
                 next(fh, None)  # the header line
                 for line in fh:
                     f = line.split()
-                    if len(f) < 8 or f[3] != "01":  # 01 = ESTABLISHED
+                    if len(f) < 10 or f[3] != "01":  # 01 = ESTABLISHED
                         continue
                     try:
                         if _proc_endpoint(f[1]) != want:
                             continue
                         if server_port is not None and _proc_endpoint(f[2])[1] != int(server_port):
                             continue
-                        return int(f[7]) == os.geteuid()
+                        if int(f[7]) != os.geteuid():
+                            return False
+                        return True
                     except ValueError:
                         continue
         except OSError:
