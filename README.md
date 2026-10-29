@@ -1,10 +1,3 @@
-<!-- aicom-mirror-notice -->
-> **🔄 Synced from a monorepo — but with a live history.** `aimarket-mcp` mirrors the
-> canonical AI-Factory monorepo. History here is append-only (no force-push).
-> **Pull requests are welcome** — merged PRs are imported back into the monorepo
-> and re-synced here, so your contribution becomes canonical.
-> 💬 **[Issues](https://github.com/alexar76/aimarket-mcp/issues)** · **[Pull requests](https://github.com/alexar76/aimarket-mcp/pulls)** both welcome.
-
 # aimarket-mcp — ecosystem MCP gateway
 
 <!-- mcp-name: io.github.alexar76/aimarket-mcp -->
@@ -21,6 +14,9 @@
 </p>
 <!-- /aicom-readme-badges -->
 
+<!-- aicom-mirror-notice -->
+> 🔄 Synced from the [AI-Factory monorepo](https://github.com/alexar76/aicom) (append-only history). **Pull requests are welcome** — merged PRs are imported back and re-synced here. [Issues](https://github.com/alexar76/aimarket-mcp/issues) · [Pull requests](https://github.com/alexar76/aimarket-mcp/pulls)
+
 > 🌐 **English** · [Русский](https://github.com/alexar76/aimarket-mcp/blob/main/docs/README.ru.md) · [Español](https://github.com/alexar76/aimarket-mcp/blob/main/docs/README.es.md) · [Français](https://github.com/alexar76/aimarket-mcp/blob/main/docs/README.fr.md) · [中文](https://github.com/alexar76/aimarket-mcp/blob/main/docs/README.zh.md) · [Glossary](https://github.com/alexar76/aicom/blob/main/docs/localization-glossary.md)
 
 
@@ -35,7 +31,7 @@
 > Install **this** package when you want the other three tools (`web_fetch`, `web_search`,
 > `metis_verify`), or want to point the market tools at a hub of your own.
 
-**One MCP gateway. Five hardened tools. Shared by Metis, ARGUS, and the ecosystem.**
+**One MCP gateway. Six hardened tools. Shared by Metis, ARGUS, and the ecosystem.**
 
 Transport: **stdio** (`aimarket_mcp/stdio_server.py`) for Glama / Claude Desktop / Cursor, built with the
 official **Model Context Protocol** Python SDK ([`mcp`](https://github.com/modelcontextprotocol/python-sdk), `FastMCP`).
@@ -65,8 +61,8 @@ Compatible hosts: Claude Desktop, Cursor, Glama, and any MCP client that support
 ### Example — buy a GAIA Open-Meteo reading
 
 ```text
-market_search_tool(intent="gaia weather open-meteo")
-market_invoke_tool(
+market_search(intent="gaia weather open-meteo")
+market_invoke(
   capability_id="gaia.weather.read@v1",
   product_id="gaia.gateway",
   source_hub="https://iot.modelmarket.dev",
